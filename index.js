@@ -7,7 +7,7 @@ require('dotenv').config();
 app.use(cors());
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const uri = process.env.ARROW_URI;
 
@@ -26,6 +26,7 @@ async function run() {
 
     const database = client.db("arrowDB");
     const tasksCollection = database.collection("tasks");
+    const usersCollection = database.collection("users");
 
 
 
@@ -82,6 +83,12 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await tasksCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.get('/api/users/freelancers', async (req, res) => {
+      const query = { role: "Freelancer", isBlocked: { $ne: true } };
+      const result = await usersCollection.find(query).toArray();
       res.send(result);
     });
 
