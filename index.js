@@ -28,7 +28,7 @@ async function run() {
     const tasksCollection = database.collection("tasks");
 
 
-    
+
 
     app.post('/api/tasks', async (req, res) => {
       const taskData = req.body;
@@ -48,10 +48,42 @@ async function run() {
       const result = await tasksCollection.insertOne(newTask);
       res.send(result);
 
+    });
 
+    app.get('/api/tasks', async (req, res) => {
+      let query = {};
+      if (req.query.email) {
+        query.client_email = req.query.email;
+      }
+      const result = await tasksCollection.find(query).sort({ createdAt: -1 }).toArray();
+      res.send(result);
+    });
+
+    app.patch('/api/tasks/:id', async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          title: updatedData.title,
+          category: updatedData.category,
+          description: updatedData.description,
+          budget: Number(updatedData.budget),
+          deadline: new Date(updatedData.deadline),
+        }
+      };
+      const result = await tasksCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
 
+    app.delete('/api/tasks/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await tasksCollection.deleteOne(query);
+      res.send(result);
+    });
 
 
 
