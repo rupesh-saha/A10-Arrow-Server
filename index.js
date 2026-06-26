@@ -28,6 +28,7 @@ async function run() {
     const tasksCollection = database.collection("tasks");
     const usersCollection = database.collection("user");
     const proposalsCollection = database.collection("proposals");
+    const paymentsCollection = database.collection("payments");
 
 
 
@@ -154,6 +155,77 @@ async function run() {
       const id = req.params.id;
       const result = await proposalsCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
+    });
+
+    // ==========================================
+    // POST: Process Mock Payment & Update System
+    // ==========================================
+    app.post('/api/payments/process', async (req, res) => {
+      const { proposal_id, task_id, client_email, freelancer_email, amount } = req.body;
+
+      // 1. Create the Payment Record
+      const newPayment = {
+        client_email,
+        freelancer_email,
+        task_id: task_id,
+        amount: Number(amount),
+        transaction_id: "mock_txn_" + Math.random().toString(36).substr(2, 9),
+        payment_status: "succeeded",
+        paid_at: new Date()
+      };
+      const paymentResult = await paymentsCollection.insertOne(newPayment);
+
+      // 2. Mark the specific proposal as "Accepted"
+      await proposalsCollection.updateOne(
+        { _id: new ObjectId(proposal_id) },
+        { $set: { status: "Accepted" } }
+      );
+
+      // 3. Mark ALL OTHER proposals for this task as "Rejected"
+      await proposalsCollection.updateMany(
+        { task_id: task_id, _id: { $ne: new ObjectId(proposal_id) } },
+        { $set: { status: "Rejected" } }
+      );
+
+      // 4. Move the Task from "Open" to "In Progress"
+      await tasksCollection.updateOne(
+        { _id: new ObjectId(task_id) },
+        { $set: { status: "In Progress" } }
+      );
+
+      res.send({ success: true, transaction_id: newPayment.transaction_id });
+    });
+
+    // ==========================================
+    // GET: Client Dashboard Stats
+    // ==========================================
+    app.get('/api/dashboard/client/:email', async (req, res) => {
+      const email = req.params.email;
+      
+      const totalTasks = await tasksCollection.countDocuments({ client_email: email });
+      const openTasks = await tasksCollection.countDocuments({ client_email: email, status: "Open" });
+      const inProgressTasks = await tasksCollection.countDocuments({ client_email: email, status: "In Progress" });
+      
+      const payments = await paymentsCollection.find({ client_email: email }).toArray();
+      const totalSpent = payments.reduce((sum, p) => sum + p.amount, 0);
+
+      res.send({ totalTasks, openTasks, inProgressTasks, totalSpent });
+    });
+
+    // ==========================================
+    // GET: Freelancer Dashboard Stats
+    // ==========================================
+    app.get('/api/dashboard/freelancer/:email', async (req, res) => {
+      const email = req.params.email;
+      
+      const totalProposals = await proposalsCollection.countDocuments({ freelancer_email: email });
+      const pendingProposals = await proposalsCollection.countDocuments({ freelancer_email: email, status: "Pending" });
+      const acceptedProposals = await proposalsCollection.countDocuments({ freelancer_email: email, status: "Accepted" });
+      
+      const payments = await paymentsCollection.find({ freelancer_email: email }).toArray();
+      const totalEarnings = payments.reduce((sum, p) => sum + p.amount, 0);
+
+      res.send({ totalProposals, pendingProposals, acceptedProposals, totalEarnings });
     });
 
 
