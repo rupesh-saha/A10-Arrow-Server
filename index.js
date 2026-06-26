@@ -115,11 +115,44 @@ async function run() {
         proposed_budget: Number(proposalData.proposed_budget),
         estimated_days: Number(proposalData.estimated_days),
         cover_note: proposalData.cover_note,
-        status: "Pending", 
+        status: "Pending",
         submitted_at: new Date()
       };
-      
+
       const result = await proposalsCollection.insertOne(newProposal);
+      res.send(result);
+    });
+
+    app.get('/api/proposals/client/:email', async (req, res) => {
+      const email = req.params.email;
+      const clientTasks = await tasksCollection.find({ client_email: email }).toArray();
+
+      const taskIds = clientTasks.map(task => task._id.toString());
+
+      const proposals = await proposalsCollection.find({ task_id: { $in: taskIds } }).sort({ submitted_at: -1 }).toArray();
+      const enrichedProposals = proposals.map(prop => {
+        const relatedTask = clientTasks.find(t => t._id.toString() === prop.task_id);
+        return {
+          ...prop,
+          task_title: relatedTask ? relatedTask.title : 'Unknown Task'
+        };
+      });
+
+      res.send(enrichedProposals);
+    });
+
+    app.patch('/api/proposals/:id/accept', async (req, res) => {
+      const id = req.params.id;
+      const result = await proposalsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "Accepted" } }
+      );
+      res.send(result);
+    });
+
+    app.delete('/api/proposals/:id', async (req, res) => {
+      const id = req.params.id;
+      const result = await proposalsCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
