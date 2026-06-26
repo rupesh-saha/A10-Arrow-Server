@@ -27,6 +27,7 @@ async function run() {
     const database = client.db("arrowDB");
     const tasksCollection = database.collection("tasks");
     const usersCollection = database.collection("user");
+    const proposalsCollection = database.collection("proposals");
 
 
 
@@ -96,6 +97,29 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.get('/api/tasks/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await tasksCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post('/api/proposals', async (req, res) => {
+      const proposalData = req.body;
+      const newProposal = {
+        task_id: proposalData.task_id,
+        freelancer_email: proposalData.freelancer_email,
+        proposed_budget: Number(proposalData.proposed_budget),
+        estimated_days: Number(proposalData.estimated_days),
+        cover_note: proposalData.cover_note,
+        status: "Pending", 
+        submitted_at: new Date()
+      };
+      
+      const result = await proposalsCollection.insertOne(newProposal);
       res.send(result);
     });
 
