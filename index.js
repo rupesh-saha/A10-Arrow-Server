@@ -26,7 +26,7 @@ async function run() {
 
     const database = client.db("arrowDB");
     const tasksCollection = database.collection("tasks");
-    const usersCollection = database.collection("users");
+    const usersCollection = database.collection("user");
 
 
 
@@ -87,8 +87,15 @@ async function run() {
     });
 
     app.get('/api/users/freelancers', async (req, res) => {
-      const query = { role: "Freelancer", isBlocked: { $ne: true } };
+      const query = { role: "freelancer", isBlocked: { $ne: true } };
       const result = await usersCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.get('/api/users/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await usersCollection.findOne(query);
       res.send(result);
     });
 
