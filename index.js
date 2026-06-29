@@ -119,6 +119,8 @@ async function run() {
       res.send(result);
     });
 
+    
+
     app.get('/api/users/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -411,13 +413,12 @@ async function run() {
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
-    // await client.close();
   }
 }
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("Server is running for Arrow!");
+  res.send("Server  no is running for Arrow!");
 });
 
 app.listen(port, () => {
