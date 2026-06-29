@@ -53,13 +53,38 @@ async function run() {
 
     });
 
-    app.get('/api/tasks', async (req, res) => {
-      let query = {};
-      if (req.query.email) {
-        query.client_email = req.query.email;
+    pp.get('/api/tasks', async (req, res) => {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 9;
+      const search = req.query.search || "";
+      const category = req.query.category || "All";
+
+      const query = { status: "Open" }; 
+
+      if (search) {
+        query.title = { $regex: search, $options: "i" }; 
       }
-      const result = await tasksCollection.find(query).sort({ createdAt: -1 }).toArray();
-      res.send(result);
+      if (category !== "All") {
+        query.category = category;
+      }
+
+      const skip = (page - 1) * limit;
+      const totalTasks = await tasksCollection.countDocuments(query);
+      const totalPages = Math.ceil(totalTasks / limit);
+
+      const tasks = await tasksCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      res.send({
+        tasks,
+        totalPages,
+        currentPage: page,
+        totalTasks
+      });
     });
 
     app.patch('/api/tasks/:id', async (req, res) => {
