@@ -119,7 +119,7 @@ async function run() {
       res.send(result);
     });
 
-    
+
 
     app.get('/api/users/:id', async (req, res) => {
       const id = req.params.id;
@@ -404,12 +404,50 @@ async function run() {
       });
     });
 
+    app.get('/api/home-stats', async (req, res) => {
+      try {
+        const latestTasks = await tasksCollection
+          .find({ status: "Open" })
+          .sort({ createdAt: -1 }) 
+          .limit(3)
+          .toArray();
+
+        const topFreelancers = await usersCollection.aggregate([
+          { $match: { role: "freelancer" } },
+          {
+            $lookup: {
+              from: "reviews",
+              localField: "email",
+              foreignField: "reviewee_email",
+              as: "reviews"
+            }
+          },
+          {
+            $project: {
+              name: 1,
+              email: 1,
+              image: 1,
+              skills: 1,
+              totalJobs: { $size: "$reviews" },
+              avgRating: { $avg: "$reviews.rating" }
+            }
+          },
+          { $sort: { totalJobs: -1 } },
+          { $limit: 6 }
+        ]).toArray();
+
+        res.send({ latestTasks, topFreelancers });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load home data", error });
+      }
+    });
 
 
 
 
 
-   
+
+
   } finally {
     // Ensures that the client will close when you finish/error
   }
