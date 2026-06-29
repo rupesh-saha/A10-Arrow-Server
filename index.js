@@ -258,6 +258,59 @@ async function run() {
       res.send(result);
     });
 
+  
+    app.get('/api/earnings/freelancer/:email', async (req, res) => {
+      const email = req.params.email;
+      
+      const payments = await paymentsCollection.find({ freelancer_email: email, payment_status: "succeeded" }).sort({ paid_at: -1 }).toArray();
+      
+      const taskIds = payments.map(p => new ObjectId(p.task_id));
+      const tasks = await tasksCollection.find({ _id: { $in: taskIds } }).toArray();
+
+      let totalEarned = 0;
+      
+      const enrichedPayments = payments.map(p => {
+        totalEarned += p.amount;
+        const relatedTask = tasks.find(t => t._id.toString() === p.task_id);
+        return {
+          ...p,
+          task_title: relatedTask ? relatedTask.title : 'Unknown Task'
+        };
+      });
+
+      res.send({
+        payments: enrichedPayments,
+        totalEarned: totalEarned,
+        averagePerTask: payments.length > 0 ? (totalEarned / payments.length) : 0
+      });
+    });
+
+
+    app.get('/api/users/email/:email', async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email: email });
+      res.send(user || {});
+    });
+
+    app.patch('/api/users/profile/:email', async (req, res) => {
+      const email = req.params.email;
+      const { name, image, skills, bio, hourlyRate } = req.body;
+      
+      const result = await usersCollection.updateOne(
+        { email: email },
+        { 
+          $set: { 
+            name: name, 
+            image: image, 
+            skills: skills, 
+            bio: bio, 
+            hourlyRate: Number(hourlyRate) 
+          } 
+        }
+      );
+      res.send(result);
+    });
+
 
 
 
