@@ -408,7 +408,7 @@ async function run() {
       try {
         const latestTasks = await tasksCollection
           .find({ status: "Open" })
-          .sort({ createdAt: -1 }) 
+          .sort({ createdAt: -1 })
           .limit(3)
           .toArray();
 
@@ -442,7 +442,15 @@ async function run() {
       }
     });
 
+    app.get('/api/tasks/client/:email', async (req, res) => {
+      const email = req.params.email;
+      const tasks = await tasksCollection
+        .find({ client_email: email })
+        .sort({ createdAt: -1 })
+        .toArray();
 
+      res.send(tasks);
+    });
 
 
 
