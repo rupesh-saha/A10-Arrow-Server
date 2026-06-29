@@ -157,13 +157,10 @@ async function run() {
       res.send(result);
     });
 
-    // ==========================================
-    // POST: Process Mock Payment & Update System
-    // ==========================================
+
     app.post('/api/payments/process', async (req, res) => {
       const { proposal_id, task_id, client_email, freelancer_email, amount } = req.body;
 
-      // 1. Create the Payment Record
       const newPayment = {
         client_email,
         freelancer_email,
@@ -175,19 +172,16 @@ async function run() {
       };
       const paymentResult = await paymentsCollection.insertOne(newPayment);
 
-      // 2. Mark the specific proposal as "Accepted"
       await proposalsCollection.updateOne(
         { _id: new ObjectId(proposal_id) },
         { $set: { status: "Accepted" } }
       );
 
-      // 3. Mark ALL OTHER proposals for this task as "Rejected"
       await proposalsCollection.updateMany(
         { task_id: task_id, _id: { $ne: new ObjectId(proposal_id) } },
         { $set: { status: "Rejected" } }
       );
 
-      // 4. Move the Task from "Open" to "In Progress"
       await tasksCollection.updateOne(
         { _id: new ObjectId(task_id) },
         { $set: { status: "In Progress" } }
@@ -196,9 +190,6 @@ async function run() {
       res.send({ success: true, transaction_id: newPayment.transaction_id });
     });
 
-    // ==========================================
-    // GET: Client Dashboard Stats
-    // ==========================================
     app.get('/api/dashboard/client/:email', async (req, res) => {
       const email = req.params.email;
       
@@ -212,9 +203,6 @@ async function run() {
       res.send({ totalTasks, openTasks, inProgressTasks, totalSpent });
     });
 
-    // ==========================================
-    // GET: Freelancer Dashboard Stats
-    // ==========================================
     app.get('/api/dashboard/freelancer/:email', async (req, res) => {
       const email = req.params.email;
       
@@ -226,6 +214,48 @@ async function run() {
       const totalEarnings = payments.reduce((sum, p) => sum + p.amount, 0);
 
       res.send({ totalProposals, pendingProposals, acceptedProposals, totalEarnings });
+    });
+
+
+    app.get('/api/proposals/freelancer/:email', async (req, res) => {
+      const email = req.params.email;
+            const proposals = await proposalsCollection.find({ freelancer_email: email }).sort({ submitted_at: -1 }).toArray();
+      
+      const taskIds = proposals.map(p => new ObjectId(p.task_id));
+      const tasks = await tasksCollection.find({ _id: { $in: taskIds } }).toArray();
+
+      const enrichedProposals = proposals.map(prop => {
+        const relatedTask = tasks.find(t => t._id.toString() === prop.task_id);
+        return {
+          ...prop,
+          task_title: relatedTask ? relatedTask.title : 'Unknown Task',
+          task_budget: relatedTask ? relatedTask.budget : 0
+        };
+      });
+      
+      res.send(enrichedProposals);
+    });
+
+    app.get('/api/projects/freelancer/:email', async (req, res) => {
+      const email = req.params.email;
+      
+      const acceptedProposals = await proposalsCollection.find({ freelancer_email: email, status: "Accepted" }).toArray();
+      const taskIds = acceptedProposals.map(p => new ObjectId(p.task_id));
+      
+      const activeTasks = await tasksCollection.find({ _id: { $in: taskIds }, status: "In Progress" }).toArray();
+
+      res.send(activeTasks);
+    });
+
+    app.patch('/api/tasks/:id/complete', async (req, res) => {
+      const id = req.params.id;
+      
+      const result = await tasksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "Completed" } }
+      );
+      
+      res.send(result);
     });
 
 
