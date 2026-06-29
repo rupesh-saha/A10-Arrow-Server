@@ -389,6 +389,19 @@ async function run() {
       res.send(result);
     });
 
+    app.get('/api/admin/payments', async (req, res) => {
+      const payments = await paymentsCollection.find().sort({ paid_at: -1 }).toArray();
+
+      const totalRevenue = payments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const avgTransaction = payments.length > 0 ? totalRevenue / payments.length : 0;
+
+      res.send({
+        payments,
+        totalRevenue,
+        avgTransaction
+      });
+    });
+
 
 
 
