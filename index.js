@@ -53,16 +53,16 @@ async function run() {
 
     });
 
-    pp.get('/api/tasks', async (req, res) => {
+    app.get('/api/tasks', async (req, res) => {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 9;
       const search = req.query.search || "";
       const category = req.query.category || "All";
 
-      const query = { status: "Open" }; 
+      const query = { status: "Open" };
 
       if (search) {
-        query.title = { $regex: search, $options: "i" }; 
+        query.title = { $regex: search, $options: "i" };
       }
       if (category !== "All") {
         query.category = category;
@@ -217,11 +217,11 @@ async function run() {
 
     app.get('/api/dashboard/client/:email', async (req, res) => {
       const email = req.params.email;
-      
+
       const totalTasks = await tasksCollection.countDocuments({ client_email: email });
       const openTasks = await tasksCollection.countDocuments({ client_email: email, status: "Open" });
       const inProgressTasks = await tasksCollection.countDocuments({ client_email: email, status: "In Progress" });
-      
+
       const payments = await paymentsCollection.find({ client_email: email }).toArray();
       const totalSpent = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -230,11 +230,11 @@ async function run() {
 
     app.get('/api/dashboard/freelancer/:email', async (req, res) => {
       const email = req.params.email;
-      
+
       const totalProposals = await proposalsCollection.countDocuments({ freelancer_email: email });
       const pendingProposals = await proposalsCollection.countDocuments({ freelancer_email: email, status: "Pending" });
       const acceptedProposals = await proposalsCollection.countDocuments({ freelancer_email: email, status: "Accepted" });
-      
+
       const payments = await paymentsCollection.find({ freelancer_email: email }).toArray();
       const totalEarnings = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -244,8 +244,8 @@ async function run() {
 
     app.get('/api/proposals/freelancer/:email', async (req, res) => {
       const email = req.params.email;
-            const proposals = await proposalsCollection.find({ freelancer_email: email }).sort({ submitted_at: -1 }).toArray();
-      
+      const proposals = await proposalsCollection.find({ freelancer_email: email }).sort({ submitted_at: -1 }).toArray();
+
       const taskIds = proposals.map(p => new ObjectId(p.task_id));
       const tasks = await tasksCollection.find({ _id: { $in: taskIds } }).toArray();
 
@@ -257,16 +257,16 @@ async function run() {
           task_budget: relatedTask ? relatedTask.budget : 0
         };
       });
-      
+
       res.send(enrichedProposals);
     });
 
     app.get('/api/projects/freelancer/:email', async (req, res) => {
       const email = req.params.email;
-      
+
       const acceptedProposals = await proposalsCollection.find({ freelancer_email: email, status: "Accepted" }).toArray();
       const taskIds = acceptedProposals.map(p => new ObjectId(p.task_id));
-      
+
       const activeTasks = await tasksCollection.find({ _id: { $in: taskIds }, status: "In Progress" }).toArray();
 
       res.send(activeTasks);
@@ -274,26 +274,26 @@ async function run() {
 
     app.patch('/api/tasks/:id/complete', async (req, res) => {
       const id = req.params.id;
-      
+
       const result = await tasksCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: "Completed" } }
       );
-      
+
       res.send(result);
     });
 
-  
+
     app.get('/api/earnings/freelancer/:email', async (req, res) => {
       const email = req.params.email;
-      
+
       const payments = await paymentsCollection.find({ freelancer_email: email, payment_status: "succeeded" }).sort({ paid_at: -1 }).toArray();
-      
+
       const taskIds = payments.map(p => new ObjectId(p.task_id));
       const tasks = await tasksCollection.find({ _id: { $in: taskIds } }).toArray();
 
       let totalEarned = 0;
-      
+
       const enrichedPayments = payments.map(p => {
         totalEarned += p.amount;
         const relatedTask = tasks.find(t => t._id.toString() === p.task_id);
@@ -320,19 +320,72 @@ async function run() {
     app.patch('/api/users/profile/:email', async (req, res) => {
       const email = req.params.email;
       const { name, image, skills, bio, hourlyRate } = req.body;
-      
+
       const result = await usersCollection.updateOne(
         { email: email },
-        { 
-          $set: { 
-            name: name, 
-            image: image, 
-            skills: skills, 
-            bio: bio, 
-            hourlyRate: Number(hourlyRate) 
-          } 
+        {
+          $set: {
+            name: name,
+            image: image,
+            skills: skills,
+            bio: bio,
+            hourlyRate: Number(hourlyRate)
+          }
         }
       );
+      res.send(result);
+    });
+
+    app.get('/api/admin/stats', async (req, res) => {
+      const totalUsers = await usersCollection.countDocuments();
+      const totalTasks = await tasksCollection.countDocuments();
+      const activeTasks = await tasksCollection.countDocuments({ status: "In Progress" });
+
+      const revenueData = await paymentsCollection.aggregate([
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]).toArray();
+      const totalRevenue = revenueData.length > 0 ? revenueData[0].total : 0;
+
+      const userRoles = await usersCollection.aggregate([
+        { $group: { _id: "$role", count: { $sum: 1 } } }
+      ]).toArray();
+
+      const taskStatus = await tasksCollection.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } }
+      ]).toArray();
+
+      const recentPayments = await paymentsCollection.find().sort({ paid_at: -1 }).limit(5).toArray();
+
+      res.send({
+        stats: { totalUsers, totalTasks, totalRevenue, activeTasks },
+        userRoles,
+        taskStatus,
+        recentPayments
+      });
+    });
+
+    app.get('/api/admin/users', async (req, res) => {
+      const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
+
+    app.patch('/api/admin/users/:id/toggle-block', async (req, res) => {
+      const id = req.params.id;
+      const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { isBlocked: !user.isBlocked } }
+      );
+      res.send(result);
+    });
+
+    app.get('/api/admin/tasks', async (req, res) => {
+      const tasks = await tasksCollection.find().toArray();
+      res.send(tasks);
+    });
+
+    app.delete('/api/admin/tasks/:id', async (req, res) => {
+      const result = await tasksCollection.deleteOne({ _id: new ObjectId(req.params.id) });
       res.send(result);
     });
 
